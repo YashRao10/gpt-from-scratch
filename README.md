@@ -64,6 +64,9 @@ tuned for quality; tuned for "runs end-to-end and you can see it learn."
 
 ## Status
 
-First working end-to-end version: tokenizer, model, training loop, and
-sampling all implemented and wired together. Not yet trained/verified on
-this machine — see `PROMPT_INPUTS.md` for the session history.
+Trained and verified end-to-end on 2026-07-20 (~34 min, 3000 iters, CPU):
+train loss 2.47 → 1.57, val loss 2.47 → 1.75 (see `train_log.txt`). Checkpoint
+at `checkpoints/gpt.pt`. Sample generation from the trained checkpoint
+(`--prompt "ROMEO:"`) produces structured, Shakespeare-flavored character-level
+text — correct dialogue formatting and character-name cadence, as expected at
+this scale. See `PROMPT_INPUTS.md` for the session history.

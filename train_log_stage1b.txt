@@ -1,0 +1,18 @@
+C:\Users\Yash Rao\Desktop\GPT-From-Scratch\venv\Lib\site-packages\torch\_subclasses\functional_tensor.py:368: UserWarning: Failed to initialize NumPy: No module named 'numpy' (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:84.)
+  cpu = _conversion_method_template(device=torch.device("cpu"))
+Using device: cpu
+Vocab size: 65 | train tokens: 1,003,854 | val tokens: 111,540
+Model parameters: 1,278,720
+iter   250 | train loss 2.4202 | val loss 2.4206 | lr 3.00e-04 | 137s elapsed
+iter   500 | train loss 2.2433 | val loss 2.2583 | lr 3.00e-04 | 273s elapsed
+iter   750 | train loss 2.0683 | val loss 2.1060 | lr 3.00e-04 | 413s elapsed
+iter  1000 | train loss 1.9068 | val loss 1.9973 | lr 3.00e-04 | 553s elapsed
+iter  1250 | train loss 1.7759 | val loss 1.9215 | lr 3.00e-04 | 692s elapsed
+iter  1500 | train loss 1.6914 | val loss 1.8402 | lr 3.00e-04 | 830s elapsed
+iter  1750 | train loss 1.6240 | val loss 1.7865 | lr 3.00e-04 | 975s elapsed
+iter  2000 | train loss 1.5733 | val loss 1.7499 | lr 3.00e-04 | 1113s elapsed
+iter  2250 | train loss 1.5331 | val loss 1.7147 | lr 3.00e-04 | 1254s elapsed
+iter  2500 | train loss 1.5024 | val loss 1.6904 | lr 3.00e-04 | 1391s elapsed
+iter  2750 | train loss 1.4763 | val loss 1.6621 | lr 3.00e-04 | 1532s elapsed
+iter  3000 | train loss 1.4520 | val loss 1.6554 | lr 3.00e-04 | 1669s elapsed
+Done. Checkpoint saved to C:\Users\Yash Rao\Desktop\GPT-From-Scratch\src\..\checkpoints\gpt_stage1b_bigger_model.pt

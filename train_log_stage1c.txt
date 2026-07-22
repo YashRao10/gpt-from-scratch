@@ -1,0 +1,26 @@
+C:\Users\Yash Rao\Desktop\GPT-From-Scratch\venv\Lib\site-packages\torch\_subclasses\functional_tensor.py:368: UserWarning: Failed to initialize NumPy: No module named 'numpy' (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:84.)
+  cpu = _conversion_method_template(device=torch.device("cpu"))
+Using device: cpu
+Vocab size: 65 | train tokens: 1,003,854 | val tokens: 111,540
+Model parameters: 1,278,720
+iter   250 | train loss 2.4696 | val loss 2.4799 | lr 3.00e-04 | 141s elapsed
+iter   500 | train loss 2.2696 | val loss 2.2775 | lr 2.97e-04 | 278s elapsed
+iter   750 | train loss 2.0796 | val loss 2.1287 | lr 2.91e-04 | 418s elapsed
+iter  1000 | train loss 1.9218 | val loss 1.9999 | lr 2.82e-04 | 556s elapsed
+iter  1250 | train loss 1.8006 | val loss 1.9223 | lr 2.69e-04 | 696s elapsed
+iter  1500 | train loss 1.7113 | val loss 1.8563 | lr 2.54e-04 | 833s elapsed
+iter  1750 | train loss 1.6460 | val loss 1.8073 | lr 2.36e-04 | 971s elapsed
+iter  2000 | train loss 1.6013 | val loss 1.7734 | lr 2.17e-04 | 1110s elapsed
+iter  2250 | train loss 1.5480 | val loss 1.7515 | lr 1.96e-04 | 1248s elapsed
+iter  2500 | train loss 1.5371 | val loss 1.7161 | lr 1.74e-04 | 1387s elapsed
+iter  2750 | train loss 1.4988 | val loss 1.6845 | lr 1.52e-04 | 1524s elapsed
+iter  3000 | train loss 1.4892 | val loss 1.6626 | lr 1.30e-04 | 1663s elapsed
+iter  3250 | train loss 1.4693 | val loss 1.6568 | lr 1.09e-04 | 1800s elapsed
+iter  3500 | train loss 1.4418 | val loss 1.6466 | lr 9.00e-05 | 1939s elapsed
+iter  3750 | train loss 1.4389 | val loss 1.6264 | lr 7.27e-05 | 2076s elapsed
+iter  4000 | train loss 1.4267 | val loss 1.6188 | lr 5.79e-05 | 2215s elapsed
+iter  4250 | train loss 1.4179 | val loss 1.6111 | lr 4.59e-05 | 2352s elapsed
+iter  4500 | train loss 1.4067 | val loss 1.6103 | lr 3.72e-05 | 2495s elapsed
+iter  4750 | train loss 1.4103 | val loss 1.6186 | lr 3.18e-05 | 2632s elapsed
+iter  5000 | train loss 1.4096 | val loss 1.6164 | lr 3.00e-05 | 2769s elapsed
+Done. Checkpoint saved to C:\Users\Yash Rao\Desktop\GPT-From-Scratch\src\..\checkpoints\gpt_stage1c_longer_scheduled.pt
