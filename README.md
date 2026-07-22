@@ -40,9 +40,17 @@ python -m venv venv
 # Train (downloads tiny-Shakespeare automatically on first run, ~3-5 min on CPU)
 .\venv\Scripts\python.exe src\train.py
 
-# Generate text from the trained checkpoint
+# Generate text from the trained checkpoint (one-shot)
 .\venv\Scripts\python.exe src\generate.py --prompt "ROMEO:" --max_new_tokens 300
+
+# Or stay in a loop and type prompts interactively
+.\venv\Scripts\python.exe src\generate.py --interactive --checkpoint gpt_stage1c_longer_scheduled.pt
 ```
+
+There's no web or GUI interface — `--interactive` is a terminal loop: type a prompt,
+press Enter, read the completion, repeat. Anything you type that isn't one of the 65
+characters the model was trained on (it's a closed character-level vocab, not a full
+Unicode-aware tokenizer) gets dropped with a warning rather than crashing.
 
 ## Default model size
 
@@ -64,9 +72,30 @@ tuned for quality; tuned for "runs end-to-end and you can see it learn."
 
 ## Status
 
-Trained and verified end-to-end on 2026-07-20 (~34 min, 3000 iters, CPU):
-train loss 2.47 → 1.57, val loss 2.47 → 1.75 (see `train_log.txt`). Checkpoint
-at `checkpoints/gpt.pt`. Sample generation from the trained checkpoint
-(`--prompt "ROMEO:"`) produces structured, Shakespeare-flavored character-level
-text — correct dialogue formatting and character-name cadence, as expected at
-this scale. See `PROMPT_INPUTS.md` for the session history.
+**Phase 1 (training-mechanics experiments) complete as of 2026-07-22** — see
+`PROJECT_PLAN.md` for the full stage-by-stage writeup. Four checkpoints were
+trained and compared on both val loss and sampled output quality:
+
+| Checkpoint | Params | Iters | Val loss |
+|---|---|---|---|
+| `gpt_v1_826k_loss1.75.pt` (original baseline, 2026-07-20) | 826K | 3000 | 1.7458 |
+| `gpt_stage1_schedule_only.pt` (LR schedule alone) | 826K | 3000 | 1.8407 |
+| `gpt_stage1b_bigger_model.pt` (bigger model alone) | 1.27M | 3000 | 1.6554 |
+| **`gpt_stage1c_longer_scheduled.pt` (current best)** | 1.27M | 5000 | **1.6164** |
+
+**Current best checkpoint: `checkpoints/gpt_stage1c_longer_scheduled.pt`.**
+Sample with:
+
+```powershell
+.\venv\Scripts\python.exe src\generate.py --prompt "ROMEO:" --checkpoint gpt_stage1c_longer_scheduled.pt
+```
+
+Headline finding: model capacity (826K → 1.27M params) was the lever that
+actually moved quality at this step budget, not training mechanics alone — a
+bare LR schedule applied to the original size (Stage 1a) made things *worse*,
+because decaying the LR over a fixed step count lowers the average effective
+LR with no offsetting benefit. The schedule only paid off once combined with
+the bigger model *and* a longer run (Stage 1c). Earlier checkpoints
+(`gpt.pt`, `gpt_v1_826k_loss1.75.pt`) remain on disk as the historical
+baseline, superseded rather than deleted. See `PROMPT_INPUTS.md` for the
+session history.

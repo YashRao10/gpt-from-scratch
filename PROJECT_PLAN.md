@@ -9,8 +9,8 @@ that drove each decision below.
 | 0 | **Baseline pipeline** | Tokenizer, model, train loop, sampling — all wired end-to-end | The full GPT architecture skeleton | — | Done | Complete (2026-07-20) |
 | 1a | **LR schedule + grad clip** | Same size/steps as v1, add warmup+cosine decay and gradient clipping | Why training *mechanics* (not just size) drive quality | ~35 min | 2026-07-22 | Done — negative result (see below) |
 | 1b | **Scale the model** | Bump to 160-dim embeddings, same step count, **constant LR** (fair size-only comparison vs v1) | How much capacity alone buys you | ~50 min | 2026-07-22 | Done — clear win (see below) |
-| 1c | **Train longer + LR schedule** | 160-dim (Stage 1b's size), extend to 4-5K steps, **now** add the cosine schedule (it needs a longer horizon to pay off — see 1a finding) | Diminishing returns / when a schedule actually helps | ~65-85 min | Same week | Queued |
-| 1d | **Compare & decide** | Sample all checkpoints side by side, pick a winner, update README | How to evaluate a model beyond the loss number | ~15 min | Same week | Queued |
+| 1c | **Train longer + LR schedule** | 160-dim (Stage 1b's size), extend to 4-5K steps, **now** add the cosine schedule (it needs a longer horizon to pay off — see 1a finding) | Diminishing returns / when a schedule actually helps | ~65-85 min | 2026-07-22 | Done — best result so far (see below) |
+| 1d | **Compare & decide** | Sample all checkpoints side by side, pick a winner, update README | How to evaluate a model beyond the loss number | ~15 min | 2026-07-22 | Done — 1c wins, Phase 1 closed (see below) |
 | 2 | **BPE tokenizer** | Replace char-level with a real byte-pair-encoding tokenizer (build merge table, encode/decode) | How GPT-2/3-style subword tokenization actually works | 2-3 hrs, own session | Next session | Planned |
 | 3 | **KV-caching** | Rewrite `generate()` to cache past keys/values instead of recomputing the full forward pass each token | How real inference servers get fast | 1-2 hrs | Following session | Planned |
 | 4 | **Weight tying** | Share the token-embedding and output-head weight matrix (a real GPT-2 trick) | A classic param-efficiency technique, cheap to implement | ~20 min | Any time, low priority | Stretch |
@@ -41,6 +41,48 @@ English words, cleaner dialogue-tag formatting. Checkpoint:
 the lever that actually mattered at this step budget. Stage 1c carries
 forward the 160-dim size and extends training, reintroducing the LR
 schedule now that there's a longer horizon for it to pay off.
+
+## Stage 1c result (2026-07-22)
+
+Extending Stage 1b's 1.27M-param model from 3000 to 5000 iters and
+reintroducing the cosine LR schedule (now with a horizon long enough to earn
+back the decay, per the Stage 1a finding) produced the best result of Phase
+1: train loss 1.4096, val loss 1.6164 — beating Stage 1b's 1.6554 at the same
+model size. Val loss actually bottomed out at iter 4500 (1.6103) and ticked
+up slightly to 1.6164 by iter 5000 — a small, real sign of the start of a
+plateau at this step count, not just noise: train loss shows the same
+non-monotonic dip-then-tick-up shape over the same window (1.4179 → 1.4067 →
+1.4103 → 1.4096), so both curves agree diminishing returns had set in by
+~4500 iters. The training
+script only checkpoints the final iteration, not the best-val one, so the
+saved checkpoint is the very slightly worse 5000-iter version — a known, tiny
+gap, not worth a rerun to shave 0.006 off val loss.
+
+## Stage 1d result — final comparison and decision (2026-07-22)
+
+Sampled all four Phase 1 checkpoints on the identical prompt (`"ROMEO:"`,
+300 tokens, temperature 0.8, top_k 50) to judge beyond the raw loss number:
+
+| Checkpoint | Params | Iters | Val loss | Qualitative read |
+|---|---|---|---|---|
+| `gpt_v1_826k_loss1.75.pt` (baseline) | 826K | 3000 | 1.7458 | Mostly non-words, some correct short English, weak dialogue structure |
+| `gpt_stage1_schedule_only.pt` (1a) | 826K | 3000 | 1.8407 | Similar to baseline, arguably choppier — matches its worse val loss |
+| `gpt_stage1b_bigger_model.pt` (1b) | 1.27M | 3000 | 1.6554 | Clearly more coherent — real multi-character dialogue (KING RICHARD II, MENENIUS, Second AUFIDIUS), correct tag formatting |
+| `gpt_stage1c_longer_scheduled.pt` (1c) | 1.27M | 5000 | 1.6164 | Comparable coherence to 1b, different cast sampled (Second Servant, JULIET) — best loss of the four |
+
+**Decision: Stage 1c (`gpt_stage1c_longer_scheduled.pt`) is the Phase 1
+winner.** It has the lowest val loss of any checkpoint tested and samples at
+least as coherently as 1b — no regression traded for the loss improvement.
+Confirms the two-part finding from 1a/1b: model capacity was the lever that
+mattered most at a fixed step budget, and the LR schedule *is* a genuine
+(if modest) net positive once the step budget is long enough to amortize the
+decay — the exact fix 1a's negative result predicted.
+
+**Phase 1 is closed.** `README.md`'s Status section and default checkpoint
+reference have been updated to point at `gpt_stage1c_longer_scheduled.pt` as
+the current best model. `gpt.pt` (the original, undifferentiated checkpoint
+name from before this project had a naming convention) and `gpt_v1_826k_loss1.75.pt`
+remain on disk as the historical baseline — not deleted, just superseded.
 
 ## Natural stopping points
 
