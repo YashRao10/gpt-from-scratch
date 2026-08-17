@@ -14,7 +14,7 @@ that drove each decision below.
 | 2 | **BPE tokenizer** | Replace char-level with a real byte-pair-encoding tokenizer (build merge table, encode/decode) | How GPT-2/3-style subword tokenization actually works | 2-3 hrs, own session | Next session | Done (2026-08-13) — see below |
 | 3 | **KV-caching** | Rewrite `generate()` to cache past keys/values instead of recomputing the full forward pass each token | How real inference servers get fast | 1-2 hrs | Following session | Done (2026-08-13) — see below |
 | 4 | **Weight tying** | Share the token-embedding and output-head weight matrix (a real GPT-2 trick) | A classic param-efficiency technique, cheap to implement | ~20 min | Any time, low priority | Done (2026-08-14) — real tradeoff found, see below |
-| 5 | **New/harder dataset** | Swap tiny-Shakespeare for something bigger (e.g. a different corpus) | How dataset size/diversity changes what the model can learn | Varies | Whenever curious | Stretch |
+| 5 | **New/harder dataset** | Swap tiny-Shakespeare for something bigger (e.g. a different corpus) | How dataset size/diversity changes what the model can learn | Varies | Whenever curious | Done (2026-08-16) — real underfitting found, see below |
 
 ## Stage 1a result (2026-07-22)
 
@@ -284,6 +284,86 @@ sharing, backward-compatible with every existing checkpoint) but is a genuine qu
 at this small scale without further work** (e.g. an explicit output-side scale factor, which
 this chunk deliberately didn't add — that would be a reasonable follow-up, not required for the
 chunk's own learning goal of understanding and correctly implementing the tying itself).
+
+## Chunk 5 result — new dataset: War and Peace, real underfitting found (2026-08-16)
+
+Added a `DATASETS` registry to `data.py` (was one hardcoded `DATA_URL`) so more than
+one corpus can be trained on without touching any other file. `tiny_shakespeare`
+stays the exact default (same url/filename/cache paths as every prior chunk), so
+nothing before this chunk changes unless a different dataset is explicitly
+requested. Added `war_and_peace` (Project Gutenberg #2600, Maude translation) --
+~3x tiny-Shakespeare's size (3.3MB vs 1.1MB) and stylistically different
+(19th-century English prose narrative vs. Early Modern English verse/dialogue),
+chosen specifically to exercise both the *size* and *diversity* halves of this
+chunk's stated goal, not just add more Shakespeare. Strips Project Gutenberg's
+license header/footer via regex markers before tokenizing (no-op for sources that
+don't have them). BPE cache filenames now include the dataset name so two corpora
+at the same vocab size can't collide.
+
+**Verified before spending real training time**, same discipline as every prior
+chunk: a standalone `load_data()` check confirmed the boilerplate stripping (text
+starts clean at "WAR AND PEACE", not the Gutenberg license) and a char vocab of
+104 (vs. tiny-Shakespeare's 65 -- expected, given accented names and a wider
+punctuation set); a full train(10 iters)->checkpoint->generate.py smoke test
+confirmed the whole pipeline wires together, including that the wider character
+set (e.g. accented names) doesn't crash the Windows console -- the same class of
+bug Chunk 2 first fixed, now confirmed to generalize.
+
+**The real run kept every other variable fixed vs. Stage 1c** (1.27M params,
+160-dim/4-head/4-layer, 5000 iters, cosine schedule, char tokenizer) so dataset
+is the *only* changed variable -- the same isolate-one-thing methodology Stage
+1a-c used to separate model size from training mechanics. First launch was
+killed mid-run by the environment at iter 2750/5000 for an unknown reason (not
+a crash -- the self-documenting checkpoint from the Stage 2 fix meant a real,
+usable partial checkpoint survived anyway); relaunched from scratch and this run
+completed cleanly through all 5000 iters, ~52 minutes.
+
+**Result: final val loss 1.4049 -- numerically lower than Stage 1c's 1.6164, but
+this is exactly the comparability trap the BPE chunk's own caveat warned about,
+just in a different form.** Both stages use the same *tokenizer type* (char), so
+the loss unit is nats/character in both cases -- more directly comparable than
+the Chunk 2 BPE-vs-char case -- but the two corpora have different vocab sizes
+(104 vs. 65) and very different character-distribution entropy, so a lower
+number here is not proof of a better-fit model. **Sampled 4 different prompts
+("Prince Andrew", "Natasha", "The count", "It was" -- swapped from the
+standardized "ROMEO:" prompt since that character doesn't exist in this book) at
+the same settings used for every other stage (temperature 0.8, top_k 50, 300
+tokens) before drawing any conclusion, same discipline Stage 4 used after its
+one degenerate-repetition sample turned out to be a fluke.** This time it wasn't
+a fluke -- all 4 samples showed the *same* pattern: a plausible, real-word-ish
+opening (character names, some grammatical structure), reliably degrading into
+repetitive fragment-loop garbage by the second half of the 300 tokens (e.g.
+"...ofonexthevonoresthithevevarenounevan inonevalousanexevearexcounvinofalononoundu..."),
+consistently worse than Stage 1c's coherence at the identical sampling settings.
+
+**Root-caused, not just reported as a vibe.** Compared the two runs' val-loss
+tails: Stage 1c's val loss bottomed at iter 4500 (1.6103) and ticked back *up*
+to 1.6164 by iter 5000 -- a real, if small, plateau/early-overfit signal (see
+Stage 1c's own result above). Stage 5's val loss shows no such uptick -- still
+falling at iter 5000 (1.4049, the lowest value of the entire run, down from
+1.4150 at iter 4750) -- clear evidence training hadn't converged yet at this
+step budget, unlike Stage 1c. The mechanism: both stages saw the identical
+number of *training tokens* (5000 iters x 32 batch x 128 block = ~20.48M
+tokens), but that's ~20.5 passes over tiny-Shakespeare's ~1M train characters
+vs. only ~7.1 passes over War and Peace's 2,887,444 train tokens -- roughly a
+third of the effective repetition/memorization exposure per character of
+source material, at the same model capacity. **This is genuine underfitting,
+not a bug**: the same capacity-and-step budget that was enough to comfortably
+fit (and start to plateau on) tiny-Shakespeare is not enough to comparably fit
+a 3x larger, more diverse corpus -- exactly the lesson this chunk's own stated
+goal was after ("how dataset size/diversity changes what the model can learn"),
+demonstrated with a concrete, measured mechanism rather than just "the sample
+looked worse."
+
+**Verdict: Chunk 5's infrastructure (multi-dataset support) works correctly and
+generalizes cleanly to a real second corpus, but the direct model-quality
+comparison it enables surfaces a genuine, mechanistically-understood capacity/
+step-budget gap, not a dataset-support bug.** A reasonable follow-up (not done
+here, out of scope for this chunk's own goal of adding dataset-swap support)
+would be training Stage 5 for meaningfully more than 5000 iters, or scaling
+`n_embd`, to see whether War and Peace's val loss would plateau at a
+qualitatively-Stage-1c-comparable coherence level given a fairer exposure
+budget for its size.
 
 ## Natural stopping points
 

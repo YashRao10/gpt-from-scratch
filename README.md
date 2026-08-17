@@ -128,5 +128,22 @@ within `block_size`, 1.64x faster on this small model. Weight tying
 (`checkpoints/gpt_stage4_tied.pt`, sample with `--checkpoint
 gpt_stage4_tied.pt`) is correctness-verified and saves the expected 10,400
 params, but comes with a real, root-caused quality tradeoff at this scale —
-see `PROJECT_PLAN.md`'s Chunk 4 result for why. Only Chunk 5 (new dataset,
-stretch, no fixed timeline) remains on the original plan.
+see `PROJECT_PLAN.md`'s Chunk 4 result for why.
+
+**Chunk 5 (new dataset — Project Gutenberg's *War and Peace*, ~3x
+tiny-Shakespeare's size and stylistically different) complete as of
+2026-08-16** — `data.py` now supports a `DATASETS` registry instead of one
+hardcoded corpus URL; `tiny_shakespeare` stays the unchanged default.
+`checkpoints/gpt_stage5_war_and_peace.pt` (same 1.27M-param/5000-iter/cosine
+config as Stage 1c, dataset as the only changed variable) finished with a
+*numerically lower* val loss (1.4049 vs. Stage 1c's 1.6164) but this is a
+comparability trap, not a win: sampled output is consistently more garbled
+than Stage 1c's across 4 different prompts, and the val-loss curve shows
+training hadn't converged at this step budget (still falling at iter 5000,
+no plateau like Stage 1c showed) — real, measured underfitting from ~3x less
+per-character training exposure at the same capacity/step budget, not a bug.
+See `PROJECT_PLAN.md`'s Chunk 5 result for the full root-cause writeup.
+Sample it with `--checkpoint gpt_stage5_war_and_peace.pt --prompt "Natasha"`
+(the standardized `"ROMEO:"` prompt doesn't apply to this book).
+
+All five chunks on the original plan are now complete.
