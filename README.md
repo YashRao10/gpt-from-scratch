@@ -15,8 +15,10 @@ meaningful model in a few minutes on CPU, since this machine has an AMD GPU
 
 Everything in `src/model.py` is built manually:
 
-- **Character-level tokenizer** (`src/data.py`) — no BPE, just a fixed
-  char-to-int vocabulary built from the training corpus.
+- **Tokenizer** — character-level by default (`src/data.py`, a fixed
+  char-to-int vocabulary built from the training corpus), or a real
+  from-scratch byte-level BPE tokenizer (`src/bpe.py`), selectable via
+  `TOKENIZER_TYPE`.
 - **Token + positional embeddings** — learned embedding tables, not
   sinusoidal.
 - **Causal multi-head self-attention** (`CausalSelfAttention`) — scaled
@@ -28,7 +30,9 @@ Everything in `src/model.py` is built manually:
   MLP (`x = x + attn(ln(x))`, `x = x + mlp(ln(x))`).
 - **Autoregressive sampling** (`GPT.generate`) — temperature and top-k
   sampling, one token at a time, feeding each generated token back in as
-  context.
+  context. KV-cached by default (`use_cache=True`) so each new token only
+  costs a forward pass over itself, not the whole context so far — see
+  `PROJECT_PLAN.md` Chunk 3 for the correctness proof and measured speedup.
 
 ## Quick Start
 
@@ -60,13 +64,11 @@ tuned for quality; tuned for "runs end-to-end and you can see it learn."
 
 ## What this deliberately doesn't do
 
-- No BPE/subword tokenizer — character-level only, to keep the vocab and
-  embedding table trivial to reason about.
-- No KV-caching during generation — each new token re-runs the full forward
-  pass over the context window. Fine at this scale, would matter at real
-  scale.
-- No distributed/multi-GPU training, mixed precision, or learning-rate
-  schedule — single CPU process, constant LR, kept simple on purpose.
+- No distributed/multi-GPU training or mixed precision — single CPU
+  process, kept simple on purpose.
+- No relative/rotary position encoding (RoPE, ALiBi) — learned absolute
+  position embeddings only, which is why KV-cached generation past
+  `block_size` degrades in quality (see `PROJECT_PLAN.md` Chunk 3).
 - No pretrained weights loaded from anywhere — every parameter starts from
   random initialization and is learned from this run.
 
@@ -82,6 +84,14 @@ trained and compared on both val loss and sampled output quality:
 | `gpt_stage1_schedule_only.pt` (LR schedule alone) | 826K | 3000 | 1.8407 |
 | `gpt_stage1b_bigger_model.pt` (bigger model alone) | 1.27M | 3000 | 1.6554 |
 | **`gpt_stage1c_longer_scheduled.pt` (current best)** | 1.27M | 5000 | **1.6164** |
+| `gpt_stage4_tied.pt` (weight tying, Chunk 4, char/same arch as 1c) | 1.268M | 5000 | 1.6465 |
+
+Chunk 4 (weight tying — sharing the token-embedding and output-head matrix, a
+real GPT-2 trick) is done and correctness-verified, but **did not become the
+new best checkpoint**: close on val loss, noticeably more garbled on sampled
+text. Root cause understood, not just observed — see `PROJECT_PLAN.md`'s
+Chunk 4 result for the weight-norm comparison that explains it. Also built
+BPE tokenization and KV-caching since Phase 1 closed — see below.
 
 **Current best checkpoint: `checkpoints/gpt_stage1c_longer_scheduled.pt`.**
 Sample with:
@@ -99,3 +109,24 @@ the bigger model *and* a longer run (Stage 1c). Earlier checkpoints
 (`gpt.pt`, `gpt_v1_826k_loss1.75.pt`) remain on disk as the historical
 baseline, superseded rather than deleted. See `PROMPT_INPUTS.md` for the
 session history.
+
+**Phase 2, Chunk 2 (real byte-level BPE tokenizer) complete as of
+2026-08-13** — see `PROJECT_PLAN.md` for the full writeup, including a real
+lost-log bug found and fixed along the way. `checkpoints/gpt_stage2_bpe.pt`
+is a from-scratch-BPE-tokenized run, confirmed trained (not just present on
+disk) via qualitative sampling — coherent Shakespeare-style dialogue
+structure, not random-init noise. BPE and char-level losses aren't on the
+same scale (see `PROJECT_PLAN.md`), so this checkpoint is a parallel
+demonstration of subword tokenization working end-to-end, not a claimed
+replacement for `gpt_stage1c_longer_scheduled.pt` as "the" best checkpoint.
+Sample it with `--checkpoint gpt_stage2_bpe.pt`.
+
+**Chunk 3 (KV-caching) and Chunk 4 (weight tying) both complete as of
+2026-08-13/14** — full writeups in `PROJECT_PLAN.md`. KV-caching is on by
+default (`use_cache=True`) and proven byte-identical to the uncached path
+within `block_size`, 1.64x faster on this small model. Weight tying
+(`checkpoints/gpt_stage4_tied.pt`, sample with `--checkpoint
+gpt_stage4_tied.pt`) is correctness-verified and saves the expected 10,400
+params, but comes with a real, root-caused quality tradeoff at this scale —
+see `PROJECT_PLAN.md`'s Chunk 4 result for why. Only Chunk 5 (new dataset,
+stretch, no fixed timeline) remains on the original plan.

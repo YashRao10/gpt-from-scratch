@@ -2,12 +2,43 @@
 
 import argparse
 import os
+import sys
 
 import torch
 
+from bpe import BPETokenizer
 from model import GPT
 
+# BPE decode() falls back to U+FFFD for any byte sequence that isn't valid
+# UTF-8 (expected from an undertrained model, or genuinely from mid-token
+# sampling cutting a multi-byte character in half) -- Windows' default
+# console codepage (cp1252) can't print that character and would otherwise
+# crash the whole script. Reconfigure stdout to a UTF-8 codec that always
+# has a fallback instead.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), "..", "checkpoints")
+
+
+class _CharCodec:
+    """Wraps a Phase-1-style stoi/itos dict pair in the same encode/decode
+    interface BPETokenizer exposes, so sample() doesn't need to branch."""
+
+    def __init__(self, stoi: dict, itos: dict):
+        self.stoi, self.itos = stoi, itos
+
+    def encode(self, text: str) -> list[int]:
+        # Unlike BPE (byte-level, so it can always represent anything as raw
+        # bytes), the char vocab is fixed to whatever chars were seen during
+        # training -- drop anything unseen instead of crashing.
+        unknown = sorted(set(c for c in text if c not in self.stoi))
+        if unknown:
+            print(f"(dropping characters not in the training vocab: {''.join(unknown)!r})")
+        return [self.stoi[c] for c in text if c in self.stoi]
+
+    def decode(self, ids: list[int]) -> str:
+        return "".join(self.itos[i] for i in ids)
 
 
 def load_model(checkpoint_name: str, device: str):
@@ -18,26 +49,24 @@ def load_model(checkpoint_name: str, device: str):
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
 
-    stoi, itos = checkpoint["stoi"], checkpoint["itos"]
-    return model, stoi, itos
+    # Checkpoints saved before Phase 2 have no "tokenizer_type" key at all --
+    # they're always char-level, so default to that for backward compatibility.
+    tokenizer_type = checkpoint.get("tokenizer_type", "char")
+    if tokenizer_type == "bpe":
+        codec = BPETokenizer.from_dict(checkpoint["bpe_data"])
+    else:
+        codec = _CharCodec(checkpoint["stoi"], checkpoint["itos"])
+    return model, codec
 
 
-def sample(model, stoi, itos, device, prompt, max_new_tokens, temperature, top_k):
-    # The model's vocab is fixed to the 65 characters seen in tiny-Shakespeare —
-    # drop anything typed that it was never trained on rather than crashing.
-    unknown = sorted(set(c for c in prompt if c not in stoi))
-    if unknown:
-        print(f"(dropping characters not in the training vocab: {''.join(unknown)!r})")
-        prompt = "".join(c for c in prompt if c in stoi)
-    if not prompt:
-        prompt = "\n"
+def sample(model, codec, device, prompt, max_new_tokens, temperature, top_k):
+    ids = codec.encode(prompt)
+    if not ids:
+        ids = codec.encode("\n")
 
-    encode = lambda s: [stoi[c] for c in s]
-    decode = lambda ids: "".join(itos[i] for i in ids)
-
-    idx = torch.tensor([encode(prompt)], dtype=torch.long, device=device)
+    idx = torch.tensor([ids], dtype=torch.long, device=device)
     out = model.generate(idx, max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k)
-    return decode(out[0].tolist())
+    return codec.decode(out[0].tolist())
 
 
 def main():
@@ -51,10 +80,10 @@ def main():
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model, stoi, itos = load_model(args.checkpoint, device)
+    model, codec = load_model(args.checkpoint, device)
 
     if not args.interactive:
-        print(sample(model, stoi, itos, device, args.prompt, args.max_new_tokens, args.temperature, args.top_k))
+        print(sample(model, codec, device, args.prompt, args.max_new_tokens, args.temperature, args.top_k))
         return
 
     print(f"Interactive mode - checkpoint: {args.checkpoint} | device: {device}")
@@ -70,7 +99,7 @@ def main():
             break
         if not user_prompt:
             user_prompt = "\n"
-        text = sample(model, stoi, itos, device, user_prompt, args.max_new_tokens, args.temperature, args.top_k)
+        text = sample(model, codec, device, user_prompt, args.max_new_tokens, args.temperature, args.top_k)
         print(text)
         print("-" * 40)
 

@@ -13,6 +13,14 @@ CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), "..", "checkpoints")
 CHECKPOINT_NAME = os.environ.get("CHECKPOINT_NAME", "gpt.pt")
 CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, CHECKPOINT_NAME)
 
+# Phase 2: "char" (Phase 1 default, kept working unchanged) or "bpe" (see bpe.py).
+TOKENIZER_TYPE = os.environ.get("TOKENIZER_TYPE", "char")
+BPE_VOCAB_SIZE = int(os.environ.get("BPE_VOCAB_SIZE", "512"))
+
+# Chunk 4: tie token_emb/head weights (default off, same backward-compat reasoning as
+# TOKENIZER_TYPE above -- existing behavior is unchanged unless explicitly opted in).
+WEIGHT_TYING = os.environ.get("WEIGHT_TYING", "0") == "1"
+
 # Staged quality-improvement plan (see PROJECT_PLAN.md): each stage changes one
 # thing vs. v1 so we can tell what actually helped. Stage 1a (schedule+clip at
 # v1's size/iters) came out worse than constant LR -- a fixed-budget cosine
@@ -64,10 +72,11 @@ def estimate_loss(model, train_data, val_data, device):
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    print(f"Using device: {device}", flush=True)
 
-    train_data, val_data, tokenizer = load_data()
-    print(f"Vocab size: {tokenizer.vocab_size} | train tokens: {len(train_data):,} | val tokens: {len(val_data):,}")
+    train_data, val_data, tokenizer = load_data(tokenizer_type=TOKENIZER_TYPE, bpe_vocab_size=BPE_VOCAB_SIZE)
+    print(f"Tokenizer: {TOKENIZER_TYPE} | vocab size: {tokenizer.vocab_size} | "
+          f"train tokens: {len(train_data):,} | val tokens: {len(val_data):,}", flush=True)
 
     config = GPTConfig(
         vocab_size=tokenizer.vocab_size,
@@ -75,12 +84,21 @@ def main():
         n_embd=N_EMBD,
         n_head=N_HEAD,
         n_layer=N_LAYER,
+        weight_tying=WEIGHT_TYING,
     )
     model = GPT(config).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Model parameters: {n_params:,}")
+    print(f"Model parameters: {n_params:,} | weight_tying: {WEIGHT_TYING}", flush=True)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+
+    # Tokenizer state to embed in the checkpoint, kept self-contained (same
+    # pattern Phase 1 used for stoi/itos) rather than pointing at an external
+    # cache file that could drift out of sync with the checkpoint later.
+    if TOKENIZER_TYPE == "char":
+        tokenizer_state = {"tokenizer_type": "char", "stoi": tokenizer.stoi, "itos": tokenizer.itos}
+    else:
+        tokenizer_state = {"tokenizer_type": "bpe", "bpe_data": tokenizer.to_dict()}
 
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     start = time.time()
@@ -101,19 +119,26 @@ def main():
         if it % EVAL_INTERVAL == 0 or it == MAX_ITERS:
             losses = estimate_loss(model, train_data, val_data, device)
             elapsed = time.time() - start
-            print(f"iter {it:5d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e} | {elapsed:.0f}s elapsed")
+            # flush=True: without it, print() output sitting in Python's stdout buffer is lost
+            # if the process gets killed rather than exiting cleanly (happened for real on the
+            # Stage 2 BPE run -- every iter/loss line vanished, only the checkpoint survived).
+            print(f"iter {it:5d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e} | {elapsed:.0f}s elapsed", flush=True)
 
+            # last_iter/last_losses: self-document the checkpoint's own training state, same
+            # reasoning as embedding tokenizer_state below -- a checkpoint should be enough on
+            # its own to know what it is, without depending on a log file surviving.
             torch.save(
                 {
                     "model_state": model.state_dict(),
                     "config": config,
-                    "stoi": tokenizer.stoi,
-                    "itos": tokenizer.itos,
+                    "last_iter": it,
+                    "last_losses": losses,
+                    **tokenizer_state,
                 },
                 CHECKPOINT_PATH,
             )
 
-    print(f"Done. Checkpoint saved to {CHECKPOINT_PATH}")
+    print(f"Done. Checkpoint saved to {CHECKPOINT_PATH}", flush=True)
 
 
 if __name__ == "__main__":

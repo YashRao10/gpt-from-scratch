@@ -1,0 +1,26 @@
+C:\Users\Yash Rao\Desktop\GPT-From-Scratch\venv\Lib\site-packages\torch\_subclasses\functional_tensor.py:368: UserWarning: Failed to initialize NumPy: No module named 'numpy' (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:84.)
+  cpu = _conversion_method_template(device=torch.device("cpu"))
+Using device: cpu
+Tokenizer: char | vocab size: 65 | train tokens: 1,003,854 | val tokens: 111,540
+Model parameters: 1,268,320 | weight_tying: True
+iter   250 | train loss 2.4814 | val loss 2.4876 | lr 3.00e-04 | 142s elapsed
+iter   500 | train loss 2.2806 | val loss 2.2969 | lr 2.97e-04 | 282s elapsed
+iter   750 | train loss 2.1058 | val loss 2.1419 | lr 2.91e-04 | 422s elapsed
+iter  1000 | train loss 1.9650 | val loss 2.0280 | lr 2.82e-04 | 564s elapsed
+iter  1250 | train loss 1.8628 | val loss 1.9673 | lr 2.69e-04 | 704s elapsed
+iter  1500 | train loss 1.7753 | val loss 1.9132 | lr 2.54e-04 | 843s elapsed
+iter  1750 | train loss 1.7134 | val loss 1.8601 | lr 2.36e-04 | 980s elapsed
+iter  2000 | train loss 1.6680 | val loss 1.8330 | lr 2.17e-04 | 1122s elapsed
+iter  2250 | train loss 1.6206 | val loss 1.7922 | lr 1.96e-04 | 1261s elapsed
+iter  2500 | train loss 1.5840 | val loss 1.7582 | lr 1.74e-04 | 1407s elapsed
+iter  2750 | train loss 1.5660 | val loss 1.7344 | lr 1.52e-04 | 1544s elapsed
+iter  3000 | train loss 1.5420 | val loss 1.7182 | lr 1.30e-04 | 1686s elapsed
+iter  3250 | train loss 1.5348 | val loss 1.6944 | lr 1.09e-04 | 1822s elapsed
+iter  3500 | train loss 1.5077 | val loss 1.6963 | lr 9.00e-05 | 1964s elapsed
+iter  3750 | train loss 1.4972 | val loss 1.6855 | lr 7.27e-05 | 2106s elapsed
+iter  4000 | train loss 1.4802 | val loss 1.6731 | lr 5.79e-05 | 2314s elapsed
+iter  4250 | train loss 1.4819 | val loss 1.6640 | lr 4.59e-05 | 2521s elapsed
+iter  4500 | train loss 1.4745 | val loss 1.6593 | lr 3.72e-05 | 2721s elapsed
+iter  4750 | train loss 1.4700 | val loss 1.6603 | lr 3.18e-05 | 2920s elapsed
+iter  5000 | train loss 1.4748 | val loss 1.6465 | lr 3.00e-05 | 3118s elapsed
+Done. Checkpoint saved to C:\Users\Yash Rao\Desktop\GPT-From-Scratch\src\..\checkpoints\gpt_stage4_tied.pt
