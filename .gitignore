@@ -1,5 +1,5 @@
 venv/
 __pycache__/
 *.pyc
-data/input.txt
+data/*.txt
 checkpoints/**/*.pt

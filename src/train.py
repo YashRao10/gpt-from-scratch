@@ -17,6 +17,10 @@ CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, CHECKPOINT_NAME)
 TOKENIZER_TYPE = os.environ.get("TOKENIZER_TYPE", "char")
 BPE_VOCAB_SIZE = int(os.environ.get("BPE_VOCAB_SIZE", "512"))
 
+# Chunk 5: which corpus to train on (see data.py's DATASETS registry). Default
+# keeps every prior chunk's exact original corpus/behavior unchanged.
+DATASET = os.environ.get("DATASET", "tiny_shakespeare")
+
 # Chunk 4: tie token_emb/head weights (default off, same backward-compat reasoning as
 # TOKENIZER_TYPE above -- existing behavior is unchanged unless explicitly opted in).
 WEIGHT_TYING = os.environ.get("WEIGHT_TYING", "0") == "1"
@@ -33,7 +37,7 @@ BLOCK_SIZE = 128
 N_EMBD = 160
 N_HEAD = 4
 N_LAYER = 4
-MAX_ITERS = 5000
+MAX_ITERS = int(os.environ.get("MAX_ITERS", "5000"))
 EVAL_INTERVAL = 250
 EVAL_ITERS = 50
 LEARNING_RATE = 3e-4
@@ -74,8 +78,10 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}", flush=True)
 
-    train_data, val_data, tokenizer = load_data(tokenizer_type=TOKENIZER_TYPE, bpe_vocab_size=BPE_VOCAB_SIZE)
-    print(f"Tokenizer: {TOKENIZER_TYPE} | vocab size: {tokenizer.vocab_size} | "
+    train_data, val_data, tokenizer = load_data(
+        tokenizer_type=TOKENIZER_TYPE, bpe_vocab_size=BPE_VOCAB_SIZE, dataset=DATASET,
+    )
+    print(f"Dataset: {DATASET} | Tokenizer: {TOKENIZER_TYPE} | vocab size: {tokenizer.vocab_size} | "
           f"train tokens: {len(train_data):,} | val tokens: {len(val_data):,}", flush=True)
 
     config = GPTConfig(
@@ -133,6 +139,7 @@ def main():
                     "config": config,
                     "last_iter": it,
                     "last_losses": losses,
+                    "dataset": DATASET,
                     **tokenizer_state,
                 },
                 CHECKPOINT_PATH,

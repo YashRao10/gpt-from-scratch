@@ -1,29 +1,70 @@
-"""Tokenizers and data loading for the tiny-Shakespeare corpus.
+"""Tokenizers and data loading, with a choice of source corpus.
 
 Supports two tokenizers, selected via `load_data(tokenizer_type=...)`:
 - "char" (Phase 1): one token per character, ~65-symbol vocab.
 - "bpe" (Phase 2): byte-level byte-pair-encoding, see bpe.py.
+
+Chunk 5: supports more than one corpus, selected via `load_data(dataset=...)`.
+"tiny_shakespeare" (default) keeps every prior chunk's behavior identical --
+same file, same path, same cache -- so nothing before this chunk changes
+unless a different dataset is explicitly requested.
 """
 
 import os
+import re
 import urllib.request
 
 import torch
 
 from bpe import BPETokenizer
 
-DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-RAW_PATH = os.path.join(DATA_DIR, "input.txt")
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "bpe_cache")
 
+# Chunk 5: named corpora. "tiny_shakespeare" is Phase 1-4's original corpus,
+# unchanged -- adding entries here must never alter its url/filename, since
+# every existing checkpoint's char vocab was built from that exact file.
+DATASETS = {
+    "tiny_shakespeare": {
+        "url": "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",
+        "filename": "input.txt",
+    },
+    # ~3x tiny_shakespeare's size (3.3MB vs 1.1MB) and stylistically different --
+    # 19th-century English prose narrative vs. Early Modern English verse/dialogue --
+    # so it exercises both the "size" and "diversity" halves of Chunk 5's goal at once,
+    # not just "more of the same corpus." Project Gutenberg #2600 (Maude translation).
+    "war_and_peace": {
+        "url": "https://www.gutenberg.org/files/2600/2600-0.txt",
+        "filename": "war_and_peace.txt",
+    },
+}
 
-def download_dataset():
+_GUTENBERG_START = re.compile(r"\*\*\* ?START OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*", re.IGNORECASE)
+_GUTENBERG_END = re.compile(r"\*\*\* ?END OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*", re.IGNORECASE)
+
+
+def _strip_gutenberg_boilerplate(text: str) -> str:
+    """Cut the license/header/footer Project Gutenberg wraps every ebook in, so the
+    corpus is just the actual work. No-op (returns text unchanged) if the markers
+    aren't present -- e.g. tiny_shakespeare's source is already the bare text.
+    """
+    start = _GUTENBERG_START.search(text)
+    end = _GUTENBERG_END.search(text)
+    if not start or not end:
+        return text
+    return text[start.end():end.start()].strip()
+
+
+def download_dataset(dataset: str = "tiny_shakespeare"):
+    if dataset not in DATASETS:
+        raise ValueError(f"unknown dataset: {dataset!r} (known: {list(DATASETS)})")
+    spec = DATASETS[dataset]
     os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(RAW_PATH):
-        print(f"Downloading dataset to {RAW_PATH} ...")
-        urllib.request.urlretrieve(DATA_URL, RAW_PATH)
-    return RAW_PATH
+    raw_path = os.path.join(DATA_DIR, spec["filename"])
+    if not os.path.exists(raw_path):
+        print(f"Downloading dataset {dataset!r} to {raw_path} ...")
+        urllib.request.urlretrieve(spec["url"], raw_path)
+    return raw_path
 
 
 class CharTokenizer:
@@ -42,16 +83,20 @@ class CharTokenizer:
         return "".join(self.itos[i] for i in ids)
 
 
-def _load_or_train_bpe(text: str, vocab_size: int) -> tuple[BPETokenizer, list[int]]:
+def _load_or_train_bpe(text: str, vocab_size: int, dataset: str) -> tuple[BPETokenizer, list[int]]:
     """Cache both the trained tokenizer and the encoded corpus -- training and
     (re-)encoding the full ~1.1M-char corpus each cost ~a minute with this
     from-scratch tokenizer's naive O(n) merge scans, so re-paying that on
     every train.py run would make iterating on model hyperparams painfully
     slow for no reason once the tokenizer itself is fixed.
+
+    Cache filenames include `dataset` (Chunk 5) so two different corpora at the
+    same vocab_size don't collide and silently load the wrong one's cache.
     """
     os.makedirs(CACHE_DIR, exist_ok=True)
-    tok_path = os.path.join(CACHE_DIR, f"bpe_{vocab_size}.json")
-    ids_path = os.path.join(CACHE_DIR, f"bpe_{vocab_size}_ids.pt")
+    prefix = "bpe" if dataset == "tiny_shakespeare" else f"bpe_{dataset}"
+    tok_path = os.path.join(CACHE_DIR, f"{prefix}_{vocab_size}.json")
+    ids_path = os.path.join(CACHE_DIR, f"{prefix}_{vocab_size}_ids.pt")
 
     if os.path.exists(tok_path) and os.path.exists(ids_path):
         tokenizer = BPETokenizer.load(tok_path)
@@ -65,16 +110,18 @@ def _load_or_train_bpe(text: str, vocab_size: int) -> tuple[BPETokenizer, list[i
     return tokenizer, ids
 
 
-def load_data(val_fraction: float = 0.1, tokenizer_type: str = "char", bpe_vocab_size: int = 512):
-    path = download_dataset()
+def load_data(val_fraction: float = 0.1, tokenizer_type: str = "char", bpe_vocab_size: int = 512,
+              dataset: str = "tiny_shakespeare"):
+    path = download_dataset(dataset)
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
+    text = _strip_gutenberg_boilerplate(text)
 
     if tokenizer_type == "char":
         tokenizer = CharTokenizer(text)
         ids = tokenizer.encode(text)
     elif tokenizer_type == "bpe":
-        tokenizer, ids = _load_or_train_bpe(text, bpe_vocab_size)
+        tokenizer, ids = _load_or_train_bpe(text, bpe_vocab_size, dataset)
     else:
         raise ValueError(f"unknown tokenizer_type: {tokenizer_type!r}")
 
