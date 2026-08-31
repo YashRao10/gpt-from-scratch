@@ -147,7 +147,7 @@ The actual `TOKENIZER_TYPE=bpe` training run (`gpt_stage2_bpe.pt`) was launched 
 session (2026-08-12) but never confirmed finished — the session ended before checking, and this
 session picked that verification up as its first task.
 
-**Confirmed complete, but not from the log — the log was empty.** `train_log_stage2_bpe.txt`
+**Confirmed complete, but not from the log — the log was empty.** `logs/train_log_stage2_bpe.txt`
 contained only the startup numpy warning, none of the per-250-iter loss lines a full run should
 produce. Root cause: `train.py`'s `print()` calls had no `flush=True`, so their output sat in
 Python's stdout buffer — if the process was killed rather than exiting cleanly (most likely the
