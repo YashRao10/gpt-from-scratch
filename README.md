@@ -56,6 +56,18 @@ press Enter, read the completion, repeat. Anything you type that isn't one of th
 characters the model was trained on (it's a closed character-level vocab, not a full
 Unicode-aware tokenizer) gets dropped with a warning rather than crashing.
 
+## Tests
+
+```bash
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\venv\Scripts\python.exe -m pytest tests/ -q
+```
+
+Smoke tests on a tiny config (CPU, no training, seconds to run): forward-pass
+shapes, loss finiteness, that generation preserves the prompt and stays in vocab,
+and the KV-cache parity claim above (cached and uncached generation are identical
+within `block_size`). Run in CI on every push (`.github/workflows/tests.yml`).
+
 ## Default model size
 
 ~800K parameters (4 layers, 4 heads, 128-dim embeddings, 128-token context) —
