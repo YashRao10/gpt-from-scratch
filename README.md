@@ -1,5 +1,7 @@
 # GPT From Scratch
 
+[![Tests](https://github.com/YashRao10/gpt-from-scratch/actions/workflows/tests.yml/badge.svg)](https://github.com/YashRao10/gpt-from-scratch/actions/workflows/tests.yml)
+
 A small GPT-style decoder-only transformer, implemented from first principles
 in PyTorch — no `nn.Transformer`, no pretrained weights. The goal isn't a
 strong model; it's to actually build and understand every piece of the
